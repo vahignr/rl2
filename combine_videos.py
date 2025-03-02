@@ -3,7 +3,7 @@ import glob
 import re
 import argparse
 import numpy as np
-from moviepy import VideoFileClip, concatenate_videoclips, TextClip, CompositeVideoClip, ColorClip
+from moviepy import VideoFileClip, concatenate_videoclips
 
 def extract_step_number(path):
     """Extract step number from path for proper ordering"""
@@ -24,38 +24,13 @@ def get_video_files(source_dir):
     
     return video_files
 
-def create_title_clip(text, duration=5, fontsize=60, color=(255, 255, 255), bg_color=(0, 0, 0), size=(720, 480)):
-    """Create a title clip with text - using RGB tuples for colors"""
-    # Create background
-    bg_clip = ColorClip(size=size, color=bg_color, duration=duration)
-    
-    # Create text clip - avoid using both font and method='caption'
-    # Use simpler text configuration to avoid conflicts
-    txt_clip = TextClip(
-        text, 
-        fontsize=fontsize, 
-        color=color,
-        size=(size[0]-40, None),
-        align='center',
-        # Don't specify method and font together
-        method='caption'
-    )
-    
-    # Position text in center
-    txt_clip = txt_clip.set_position('center').set_duration(duration)
-    
-    # Composite
-    return CompositeVideoClip([bg_clip, txt_clip])
-
-def add_section_title(video_clip, title, duration=3):
-    """Add a section title at the beginning of a video clip"""
-    title_clip = create_title_clip(title, duration=duration, size=video_clip.size)
-    return concatenate_videoclips([title_clip, video_clip])
-
 def combine_videos(output_path, random_videos=None, checkpoint_videos=None, 
                   final_videos=None, fps=30, add_titles=True, max_duration=15*60):
     """
     Combine videos from different training stages into a single video.
+    Simplified version without title screens but maintains parameter compatibility.
+    
+    Note: add_titles parameter is maintained for compatibility but not used.
     """
     clips = []
     
@@ -65,9 +40,8 @@ def combine_videos(output_path, random_videos=None, checkpoint_videos=None,
             random_clips = [VideoFileClip(vid) for vid in random_videos[:2]]  # Limit to 2 random videos
             if random_clips:
                 random_combined = concatenate_videoclips(random_clips)
-                if add_titles:
-                    random_combined = add_section_title(random_combined, "Random Agent (Untrained)")
                 clips.append(random_combined)
+                print("Added random agent videos")
         except Exception as e:
             print(f"Error processing random agent videos: {e}")
     
@@ -89,16 +63,12 @@ def combine_videos(output_path, random_videos=None, checkpoint_videos=None,
             
             # Create clips for each checkpoint
             for i, vid_path in enumerate(selected_checkpoints):
-                # Extract step number for title
-                step_num = extract_step_number(vid_path)
-                clip = VideoFileClip(vid_path)
-                
-                if add_titles:
-                    # Add a title indicating the training progress
-                    title = f"Training Progress: {step_num:,} Steps"
-                    clip = add_section_title(clip, title, duration=2)
-                
-                clips.append(clip)
+                try:
+                    clip = VideoFileClip(vid_path)
+                    clips.append(clip)
+                    print(f"Added checkpoint video: {vid_path}")
+                except Exception as e:
+                    print(f"Error with checkpoint video {vid_path}: {e}")
         except Exception as e:
             print(f"Error processing checkpoint videos: {e}")
     
@@ -108,9 +78,8 @@ def combine_videos(output_path, random_videos=None, checkpoint_videos=None,
             final_clips = [VideoFileClip(vid) for vid in final_videos[:3]]  # Limit to 3 final videos
             if final_clips:
                 final_combined = concatenate_videoclips(final_clips)
-                if add_titles:
-                    final_combined = add_section_title(final_combined, "Final Trained Agent")
                 clips.append(final_combined)
+                print("Added final agent videos")
         except Exception as e:
             print(f"Error processing final agent videos: {e}")
     
@@ -119,6 +88,7 @@ def combine_videos(output_path, random_videos=None, checkpoint_videos=None,
         return
     
     # Combine all clips
+    print(f"Combining {len(clips)} video segments")
     final_clip = concatenate_videoclips(clips)
     
     # Check if the video is too long and needs to be sped up
@@ -132,15 +102,8 @@ def combine_videos(output_path, random_videos=None, checkpoint_videos=None,
         final_clip = final_clip.speedx(speed_factor)
         print(f"New duration: {final_clip.duration:.1f} seconds")
     
-    # Add an outro - without title to avoid color errors
-    try:
-        outro_text = f"Training completed\nSpeed: {speed_factor:.2f}x\nTotal training steps: {extract_step_number(checkpoint_videos[-1]) if checkpoint_videos else 'Unknown'}"
-        outro = create_title_clip(outro_text, duration=5, size=final_clip.size)
-        final_clip = concatenate_videoclips([final_clip, outro])
-    except Exception as e:
-        print(f"Warning: Could not add outro: {e}")
-    
     # Write final video
+    print(f"Writing video to {output_path}...")
     final_clip.write_videofile(output_path, fps=fps, threads=4, 
                               codec='libx264', audio=False)
     print(f"Combined video saved to {output_path}")
@@ -183,7 +146,7 @@ def main():
             checkpoint_videos=checkpoint_videos,
             final_videos=final_videos,
             fps=args.fps,
-            add_titles=not args.no_titles,
+            add_titles=not args.no_titles,  # Maintain parameter for compatibility
             max_duration=args.max_duration
         )
     except Exception as e:

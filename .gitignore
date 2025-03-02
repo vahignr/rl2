@@ -1,1 +1,6 @@
 env
+__pycache__/
+logs/
+models/
+training_video.mp4
+videos/
