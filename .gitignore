@@ -3,4 +3,5 @@ __pycache__/
 logs/
 models/
 training_video.mp4
+combined_single_env.mp4
 videos/
